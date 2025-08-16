@@ -1,1 +1,25 @@
--
+terraform {
+    required_providers {
+        aws = {
+            source = "hashicorp/aws"
+            version = "~> 6.0"
+        }
+    }
+}
+
+# Configure the AWS Provider
+provider "aws" {
+    region = "us-east-1"
+
+    #access key & secret key are in the environment variable
+}
+
+#Create a Ec2
+resource "aws_instance" "ec2_instance_aws" {
+    ami = "ami-0de716d6197524dd9"
+    instance_type = "t3.micro"
+
+    tags = {
+        Name = "terraform-created"
+    }
+}
