@@ -1,0 +1,136 @@
+terraform {
+    required_providers {
+        aws = {
+            source = "hashicorp/aws"
+            version = "~> 6.0"
+        }
+    }
+}
+
+# Configure the AWS Provider
+provider "aws" {
+    region = "ap-south-1"
+
+    #access key & secret key are in the environment variable
+}
+
+#vpc_id from console = vpc-03bbe5f08eca6042d
+resource "aws_vpc" "new-vpc" {
+    cidr_block = "10.0.0.0/16"
+
+    tags = {
+        Name = "terraform-new-vpc"
+    }
+}
+
+#Above will generate VPC along with default route_tables, VPC security group and NACL.
+# Creating a new VPC will make AWS automatically create:
+# - a default route table
+# - a default security group
+# - a default NACL
+# These defaults exist in AWS, but Terraform does not manage them unless you import them or use data sources.
+
+
+#resource to import default route table for VPC
+resource "aws_route_table" "default-route-table" {
+    propagating_vgws = []
+    route {
+        cidr_block = "0.0.0.0/0"
+        gateway_id = aws_internet_gateway.internetgateway-for-new_vpc.id
+    }
+    
+    tags             = {
+        Name = "terraform-managed"
+    }
+    vpc_id           = "vpc-03bbe5f08eca6042d"
+}
+
+#resource to import default security group, the attribute inside the block are 
+#from the command terraform state show "resoure name"
+
+#default SG group id = sg-0d188ec50493e1223
+resource "aws_default_security_group" "the-default-vpc-SG" {
+     egress      = [
+        {
+            cidr_blocks      = [
+                "0.0.0.0/0",
+            ]
+            description      = null
+            from_port        = 0
+            ipv6_cidr_blocks = []
+            prefix_list_ids  = []
+            protocol         = "-1"
+            security_groups  = []
+            self             = false
+            to_port          = 0
+        },
+    ]
+
+    ingress     = [
+        {
+            cidr_blocks      = []
+            description      = null
+            from_port        = 0
+            ipv6_cidr_blocks = []
+            prefix_list_ids  = []
+            protocol         = "-1"
+            security_groups  = []
+            self             = true
+            to_port          = 0
+        },
+    ]
+
+    tags_all    = {
+        Name = "terraform default VPC SG"
+    }
+
+   vpc_id      = "vpc-03bbe5f08eca6042d"
+}
+
+# including the default NACL in the terraform as data source NOT as a seprate resource
+# Data source to fetch the default NACL of the new VPC
+data "aws_network_acls" "default" {
+
+  #looks for all the nacl tagged to the following VPC  
+  vpc_id = aws_vpc.new-vpc.id
+
+  #as ONLY ONE will be default we will select that. AND OUTPUT THAT IN THE FOLLOWING output section
+  filter {
+    name   = "default"
+    values = ["true"]
+  }
+}
+
+#outputs the above filter datasource NACL
+output "default_nacl_id" {
+  value = data.aws_network_acls.default.ids[0]
+}
+
+
+#Creating the 2 subnets of the VPC
+resource "aws_subnet" "subnet-01" {
+    vpc_id = aws_vpc.new-vpc.id
+    cidr_block = "10.0.0.0/17"
+
+    tags = {
+        Name = "terraform-created-subnet01"
+    }
+}
+
+resource "aws_subnet" "subnet-02" {
+    vpc_id = aws_vpc.new-vpc.id
+    cidr_block = "10.0.128.0/17"
+
+    tags = {
+        Name = "terraform-created-subnet02"
+    }
+}
+
+resource "aws_internet_gateway" "internetgateway-for-new_vpc" {
+
+    vpc_id = aws_vpc.new-vpc.id
+
+    tags = {
+        Name = "terraform-created-IG"
+    }
+}
